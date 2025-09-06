@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/professor.dart';
@@ -23,7 +24,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'frequencia_escolar.db');
     return await openDatabase(
       path,
-      version: 2, // Incrementei a versão para forçar recriação
+      version: 3, // Incrementei a versão para adicionar frequencias_pendentes
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -125,15 +126,31 @@ class DatabaseHelper {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE frequencias_pendentes(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        professor_id INTEGER NOT NULL,
+        turma_id INTEGER NOT NULL,
+        disciplina_id INTEGER NOT NULL,
+        data TEXT NOT NULL,
+        aula_numero INTEGER NOT NULL,
+        presencas TEXT NOT NULL,
+        sincronizado INTEGER NOT NULL DEFAULT 0,
+        criado_em TEXT
+      )
+    ''');
+
     // Removido: não inserir dados mockados; app faz sync real após login
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
+    if (oldVersion < 3) {
       // Dropar tabelas antigas e recriar com nova estrutura
       await db.execute('DROP TABLE IF EXISTS frequencias');
+      await db.execute('DROP TABLE IF EXISTS frequencias_pendentes');
       await db.execute('DROP TABLE IF EXISTS aulas');
       await db.execute('DROP TABLE IF EXISTS alunos');
+      await db.execute('DROP TABLE IF EXISTS horarios');
       await db.execute('DROP TABLE IF EXISTS turmas');
       await db.execute('DROP TABLE IF EXISTS escolas');
       await db.execute('DROP TABLE IF EXISTS professores');
@@ -241,6 +258,76 @@ class DatabaseHelper {
     return List.generate(maps.length, (i) => Turma.fromMap(maps[i]));
   }
 
+  // ===== ALUNOS =====
+  Future<void> saveAlunos(List<Map<String, dynamic>> alunos, int turmaId, int professorId) async {
+    final db = await database;
+    // Limpar alunos existentes da turma
+    await db.delete('alunos', where: 'turma_id = ?', whereArgs: [turmaId]);
+    
+    int alunosValidos = 0;
+    int alunosInvalidos = 0;
+    
+    for (final aluno in alunos) {
+      // Validar dados obrigatórios - tratar diferentes formatos de campos
+      final nome = (aluno['nome'] ?? aluno['aluno_nome'])?.toString().trim();
+      final alunoId = aluno['aluno_id'] ?? aluno['vinculo_aluno_id'] ?? aluno['id'];
+      
+      // Tratar tanto null quanto string "null" como inválidos
+      if (nome == null || nome.isEmpty || nome.toLowerCase() == 'null' || alunoId == null) {
+        print('⚠️ Aluno com dados inválidos ignorado: nome="$nome", id="$alunoId"');
+        alunosInvalidos++;
+        continue;
+      }
+      
+      try {
+        await db.insert('alunos', {
+          'id': alunoId,
+          'nome': nome,
+          'matricula': (aluno['matricula'] ?? aluno['vinculo_aluno_id'])?.toString() ?? '',
+          'turma_id': turmaId,
+          'sincronizado': 1,
+          'criado_em': DateTime.now().toIso8601String(),
+        });
+        alunosValidos++;
+      } catch (e) {
+        print('❌ Erro ao inserir aluno "$nome": $e');
+        alunosInvalidos++;
+      }
+    }
+    
+    print('💾 Alunos salvos: $alunosValidos válidos, $alunosInvalidos inválidos');
+  }
+
+  Future<List<Map<String, dynamic>>> getAlunosCached(int turmaId, int disciplinaId, DateTime data, int aulaNumero) async {
+    final db = await database;
+    // Buscar alunos da turma com informações de frequência se existir
+    final maps = await db.rawQuery('''
+      SELECT 
+        a.id as aluno_id,
+        a.nome,
+        a.matricula,
+        a.turma_id,
+        a.id as vinculo_aluno_id,
+        COALESCE(f.presente, 1) as presente
+      FROM alunos a
+      LEFT JOIN frequencias f ON f.aluno_id = a.id 
+      WHERE a.turma_id = ?
+      ORDER BY a.nome
+    ''', [turmaId]);
+    
+    return maps.map((map) => {
+      'aluno_id': map['aluno_id'],
+      'aluno_nome': map['nome'], // Mapear para o formato esperado
+      'nome': map['nome'],
+      'matricula': map['matricula'],
+      'turma_id': map['turma_id'],
+      'vinculo_aluno_id': map['vinculo_aluno_id'],
+      'presente': map['presente'],
+      'tem_falta': map['presente'] == 0,
+      'falta': map['presente'] == 0 ? 1 : 0,
+    }).toList();
+  }
+
   // ===== HORÁRIOS =====
   Future<void> saveHorarios(List<Map<String, dynamic>> horarios, int turmaId, int escolaId, int professorId) async {
     final db = await database;
@@ -338,6 +425,56 @@ class DatabaseHelper {
       return Frequencia.fromMap(maps.first);
     }
     return null;
+  }
+
+  // ===== FREQUÊNCIAS PENDENTES (OFFLINE) =====
+  Future<int> insertFrequenciaPendente({
+    required int professorId,
+    required int turmaId,
+    required int disciplinaId,
+    required String data,
+    required int aulaNumero,
+    required List<Map<String, dynamic>> presencas,
+  }) async {
+    final db = await database;
+    return await db.insert('frequencias_pendentes', {
+      'professor_id': professorId,
+      'turma_id': turmaId,
+      'disciplina_id': disciplinaId,
+      'data': data,
+      'aula_numero': aulaNumero,
+      'presencas': jsonEncode(presencas),
+      'sincronizado': 0,
+      'criado_em': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getFrequenciasPendentes() async {
+    final db = await database;
+    return await db.query(
+      'frequencias_pendentes',
+      where: 'sincronizado = 0',
+      orderBy: 'criado_em ASC',
+    );
+  }
+
+  Future<void> marcarFrequenciaPendenteComoSincronizada(int id) async {
+    final db = await database;
+    await db.update(
+      'frequencias_pendentes',
+      {'sincronizado': 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> removerFrequenciaPendente(int id) async {
+    final db = await database;
+    await db.delete(
+      'frequencias_pendentes',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<List<Map<String, dynamic>>> getRegistrosPendentes() async {

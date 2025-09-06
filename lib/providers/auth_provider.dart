@@ -158,4 +158,51 @@ class AuthProvider with ChangeNotifier {
     
     _setSyncing(false, null);
   }
+
+  /// Método chamado quando a conectividade é restaurada
+  Future<void> onConnectivityRestored() async {
+    print('🔄 AuthProvider.onConnectivityRestored: INICIADO - professor: ${_professor?.codigo}, isSyncing: $_isSyncing');
+    
+    if (_professor != null && !_isSyncing) {
+      print('📱 Conectividade restaurada, iniciando sincronização automática...');
+      print('🔄 AuthProvider.onConnectivityRestored: chamando syncIncremental');
+      
+      _setSyncing(true, 'Enviando dados offline...');
+      
+      try {
+        print('🔄 AuthProvider: antes de chamar syncIncremental');
+        final result = await _fullSyncService.syncIncremental(_professor!.codigo);
+        print('🔄 AuthProvider: depois de chamar syncIncremental - result: $result');
+        
+        if (result['success']) {
+          final details = result['details'] as Map<String, dynamic>?;
+          final uploaded = details?['uploaded'] ?? 0;
+          
+          if (uploaded > 0) {
+            _setSyncing(false, 'Enviados $uploaded registros offline');
+          } else {
+            _setSyncing(false, 'Dados sincronizados');
+          }
+        } else {
+          _setSyncing(false, 'Erro na sincronização');
+        }
+        
+        // Limpar mensagem após 3 segundos
+        Future.delayed(Duration(seconds: 3), () {
+          if (_syncMessage?.contains('Enviados') == true || 
+              _syncMessage == 'Dados sincronizados' ||
+              _syncMessage == 'Erro na sincronização') {
+            _syncMessage = null;
+            notifyListeners();
+          }
+        });
+        
+      } catch (e) {
+        _setSyncing(false, 'Erro na sincronização automática');
+        print('❌ Erro na sincronização automática: $e');
+      }
+    } else {
+      print('🔄 AuthProvider.onConnectivityRestored: NÃO EXECUTADO - professor: ${_professor?.codigo}, isSyncing: $_isSyncing');
+    }
+  }
 }

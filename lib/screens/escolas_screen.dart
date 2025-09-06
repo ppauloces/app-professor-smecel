@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/escola.dart';
 import '../services/escola_service.dart';
+import '../widgets/sync_status_widget.dart';
 import 'turmas_screen.dart';
 import 'login_screen.dart';
 
@@ -70,6 +71,7 @@ class _EscolasScreenState extends State<EscolasScreen> {
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         actions: [
+          const SyncStatusWidget(),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'logout') {

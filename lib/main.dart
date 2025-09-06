@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/connectivity_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/escolas_screen.dart';
 
@@ -20,6 +21,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
       ],
       child: MaterialApp(
@@ -56,14 +58,38 @@ class _AuthWrapperState extends State<AuthWrapper> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Inicializar conectividade
+      Provider.of<ConnectivityProvider>(context, listen: false).initialize();
+      // Verificar autenticação
       Provider.of<AuthProvider>(context, listen: false).checkAuthStatus();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, child) {
+    return Consumer2<AuthProvider, ConnectivityProvider>(
+      builder: (context, authProvider, connectivityProvider, child) {
+        // Listener para reconexão automática
+        print('🔌 MainApp: isConnected=${connectivityProvider.isConnected}, isAuthenticated=${authProvider.isAuthenticated}, isSyncing=${authProvider.isSyncing}, wasOffline=${connectivityProvider.wasOffline}');
+        
+        if (connectivityProvider.isConnected && 
+            authProvider.isAuthenticated && 
+            !authProvider.isSyncing) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            // Verificar se acabou de reconectar (foi offline antes)
+            if (connectivityProvider.wasOffline) {
+              print('🔌 MainApp: Reconectou! Chamando authProvider.onConnectivityRestored()');
+              authProvider.onConnectivityRestored();
+              // Limpar o flag depois da sincronização
+              connectivityProvider.clearWasOffline();
+            } else {
+              print('🔌 MainApp: Conectado mas não foi offline antes - wasOffline=${connectivityProvider.wasOffline}');
+            }
+          });
+        } else {
+          print('🔌 MainApp: Condições não atendidas para sync automático');
+        }
+        
         if (authProvider.isLoading) {
           return const Scaffold(
             body: Center(
