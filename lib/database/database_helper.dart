@@ -24,7 +24,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'frequencia_escolar.db');
     return await openDatabase(
       path,
-      version: 3, // Incrementei a versão para adicionar frequencias_pendentes
+      version: 4, // bump p/ garantir criação de faltas_local em bases existentes
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -140,23 +140,46 @@ class DatabaseHelper {
       )
     ''');
 
+    // Tabela para refletir rapidamente faltas locais por aula (espelha a lógica do servidor)
+    await db.execute('''
+      CREATE TABLE faltas_local(
+        matricula_id INTEGER NOT NULL,
+        disciplina_id INTEGER NOT NULL,
+        numero_aula INTEGER NOT NULL,
+        data TEXT NOT NULL,
+        PRIMARY KEY (matricula_id, disciplina_id, numero_aula, data)
+      )
+    ''');
+
     // Removido: não inserir dados mockados; app faz sync real após login
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 3) {
-      // Dropar tabelas antigas e recriar com nova estrutura
+      // Recriação completa para bases muito antigas
       await db.execute('DROP TABLE IF EXISTS frequencias');
       await db.execute('DROP TABLE IF EXISTS frequencias_pendentes');
+      await db.execute('DROP TABLE IF EXISTS faltas_local');
       await db.execute('DROP TABLE IF EXISTS aulas');
       await db.execute('DROP TABLE IF EXISTS alunos');
       await db.execute('DROP TABLE IF EXISTS horarios');
       await db.execute('DROP TABLE IF EXISTS turmas');
       await db.execute('DROP TABLE IF EXISTS escolas');
       await db.execute('DROP TABLE IF EXISTS professores');
-      
-      // Recriar todas as tabelas
       await _onCreate(db, newVersion);
+    }
+
+    if (oldVersion < 4) {
+      // Migração leve: apenas garantir a tabela de faltas_local
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS faltas_local(
+          matricula_id INTEGER NOT NULL,
+          disciplina_id INTEGER NOT NULL,
+          numero_aula INTEGER NOT NULL,
+          data TEXT NOT NULL,
+          PRIMARY KEY (matricula_id, disciplina_id, numero_aula, data)
+        )
+      ''');
     }
   }
 
@@ -300,20 +323,25 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getAlunosCached(int turmaId, int disciplinaId, DateTime data, int aulaNumero) async {
     final db = await database;
-    // Buscar alunos da turma com informações de frequência se existir
+    final dataStr = '${data.year.toString().padLeft(4,'0')}-${data.month.toString().padLeft(2,'0')}-${data.day.toString().padLeft(2,'0')}';
+
+    // Busca alunos e marca falta com base em faltas_local para a aula (disciplina/data/número)
     final maps = await db.rawQuery('''
       SELECT 
         a.id as aluno_id,
         a.nome,
         a.matricula,
         a.turma_id,
-        a.id as vinculo_aluno_id,
-        COALESCE(f.presente, 1) as presente
+        fl.matricula_id IS NOT NULL as tem_falta
       FROM alunos a
-      LEFT JOIN frequencias f ON f.aluno_id = a.id 
+      LEFT JOIN faltas_local fl 
+        ON fl.matricula_id = CAST(a.matricula AS INTEGER)
+       AND fl.disciplina_id = ?
+       AND fl.numero_aula = ?
+       AND fl.data = ?
       WHERE a.turma_id = ?
       ORDER BY a.nome
-    ''', [turmaId]);
+    ''', [disciplinaId, aulaNumero, dataStr, turmaId]);
     
     return maps.map((map) => {
       'aluno_id': map['aluno_id'],
@@ -321,11 +349,40 @@ class DatabaseHelper {
       'nome': map['nome'],
       'matricula': map['matricula'],
       'turma_id': map['turma_id'],
-      'vinculo_aluno_id': map['vinculo_aluno_id'],
-      'presente': map['presente'],
-      'tem_falta': map['presente'] == 0,
-      'falta': map['presente'] == 0 ? 1 : 0,
+      'vinculo_aluno_id': int.tryParse((map['matricula'] ?? '').toString()) ?? 0,
+      'tem_falta': (map['tem_falta'] == 1) || (map['tem_falta'] == true),
+      'falta': ((map['tem_falta'] == 1) || (map['tem_falta'] == true)) ? 1 : 0,
     }).toList();
+  }
+
+  // Limpa registros de faltas locais de uma aula específica
+  Future<void> clearFaltasLocal(int disciplinaId, int aulaNumero, String data) async {
+    final db = await database;
+    await db.delete('faltas_local', where: 'disciplina_id = ? AND numero_aula = ? AND data = ?', whereArgs: [disciplinaId, aulaNumero, data]);
+  }
+
+  // Salva lista de faltas locais (apenas ausentes)
+  Future<void> saveFaltasLocal({
+    required List<int> matriculasAusentes,
+    required int disciplinaId,
+    required int aulaNumero,
+    required String data,
+  }) async {
+    final db = await database;
+    final batch = db.batch();
+    for (final m in matriculasAusentes) {
+      batch.insert(
+        'faltas_local',
+        {
+          'matricula_id': m,
+          'disciplina_id': disciplinaId,
+          'numero_aula': aulaNumero,
+          'data': data,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
   }
 
   // ===== HORÁRIOS =====

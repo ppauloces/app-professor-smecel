@@ -183,8 +183,22 @@ class NovaFrequenciaService {
         aulaNumero: aulaNumero,
         presencas: presencas,
       );
+      // Atualiza também o espelho de faltas locais para refletir na UI offline
+      final ausentes = presencas
+          .where((p) => !(p['presente'] == true || (p['presente'] is String && (p['presente'].toString().toLowerCase() == 'true' || p['presente'].toString() == '1'))))
+          .map<int>((p) => (p['aluno_id'] as int))
+          .toList();
+
+      // Limpa faltas anteriores desta aula e grava as novas
+      await _databaseHelper.clearFaltasLocal(int.parse(disciplinaId), aulaNumero, dataFormatada);
+      await _databaseHelper.saveFaltasLocal(
+        matriculasAusentes: ausentes,
+        disciplinaId: int.parse(disciplinaId),
+        aulaNumero: aulaNumero,
+        data: dataFormatada,
+      );
       
-      print('✅ Frequência salva offline - será enviada quando conectar');
+      print('✅ Frequência salva offline - será enviada quando conectar (faltas_local atualizado)');
       return true;
     } catch (e) {
       print('❌ Erro ao salvar offline: $e');
