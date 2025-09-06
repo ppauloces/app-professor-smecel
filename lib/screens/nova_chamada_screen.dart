@@ -58,10 +58,8 @@ class _NovaChamadaScreenState extends State<NovaChamadaScreen> {
         
         setState(() {
           _alunos = alunos;
-          // Inicializa presenças baseado no status atual (lógica inversa: tem falta = false)
-          _presencas = {
-            for (var aluno in alunos) aluno.id: !aluno.temFalta
-          };
+          // Inicializa switches: presente = !temFalta
+          _presencas = { for (var aluno in alunos) aluno.id: !aluno.temFalta };
           _isLoading = false;
         });
       }

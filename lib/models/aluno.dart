@@ -31,10 +31,19 @@ class Aluno {
       id: int.tryParse((map['aluno_id'] ?? map['id']).toString()) ?? 0,
       vinculoAlunoId: int.tryParse((map['vinculo_aluno_id'] ?? map['id']).toString()) ?? 0,
       nome: map['aluno_nome'] ?? map['nome'] ?? '',
-      temFalta: map['falta'] == 1 || map['tem_falta'] == 1,
+      temFalta: _asBoolOne(map['falta'] ?? map['tem_falta']),
       sincronizado: map['sincronizado'] == 1,
       criadoEm: map['criado_em'] != null ? DateTime.parse(map['criado_em']) : null,
     );
+  }
+
+  // Converte valores variados (1, '1', 'S', 'sim', 'true') em boolean true
+  static bool _asBoolOne(dynamic value) {
+    if (value == null) return false;
+    if (value is bool) return value;
+    if (value is num) return value == 1;
+    final s = value.toString().trim().toLowerCase();
+    return s == '1' || s == 's' || s == 'sim' || s == 'true' || s == 't';
   }
 
   Aluno copyWith({
