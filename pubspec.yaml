@@ -1,5 +1,5 @@
 name: professorv2
-description: "SMECEL: Frequ\u00eancia do Professor Offline"
+description: "SMECEL: Frequ\u00eancia do Aluno Offline"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -22,6 +22,7 @@ dependencies:
   google_fonts: ^6.2.1
   lottie: ^2.7.0
   dotlottie_loader: ^0.0.4
+  timezone: ^0.9.4
   flutter_local_notifications: ^18.0.1
 
 dev_dependencies:

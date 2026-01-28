@@ -72,7 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 20),
                     const SizedBox(height: 6),
                     const Text(
-                      'Frequ\u00eancia Escolar',
+                      'Frequ\u00eancia do Aluno',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,

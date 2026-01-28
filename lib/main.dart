@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'utils/http_overrides.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -13,9 +12,7 @@ import 'widgets/lottie_loading.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (kDebugMode) {
-    HttpOverrides.global = DevHttpOverrides();
-  }
+  HttpOverrides.global = DevHttpOverrides();
   await NotificationService().initialize();
   runApp(const MyApp());
 }
@@ -31,7 +28,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
       ],
       child: MaterialApp(
-        title: 'SMECEL - Frequência Escolar',
+        title: 'SMECEL - Frequ\u00eancia do Aluno',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,

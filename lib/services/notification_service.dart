@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 import '../database/database_helper.dart';
 
 class NotificationService {
@@ -19,6 +21,18 @@ class NotificationService {
   String? _professorCodigo;
   bool _initialized = false;
   bool _permissaoConcedida = false;
+  bool _timeZoneReady = false;
+
+  static const int _reminderBaseId = 7000;
+
+  static const List<_ReminderTime> _horariosLembrete = [
+    _ReminderTime(6, 30),
+    _ReminderTime(7, 0),
+    _ReminderTime(12, 0),
+    _ReminderTime(13, 0),
+    _ReminderTime(18, 0),
+    _ReminderTime(22, 0),
+  ];
 
   /// Mensagens amigaveis para o professor
   static const List<String> _mensagensLembrete = [
@@ -48,9 +62,32 @@ class NotificationService {
     );
 
     await _plugin.initialize(initSettings);
+    await _configureLocalTimeZone();
     _initialized = true;
 
     debugPrint('[Notificacao] Servico inicializado');
+  }
+
+  Future<void> _configureLocalTimeZone() async {
+    if (_timeZoneReady) return;
+    try {
+      tz.initializeTimeZones();
+      final offset = DateTime.now().timeZoneOffset;
+      final hours = offset.inHours;
+      final minutes = offset.inMinutes.remainder(60).abs();
+
+      if (minutes == 0) {
+        final sign = hours <= 0 ? '+' : '-';
+        final name = 'Etc/GMT$sign${hours.abs()}';
+        tz.setLocalLocation(tz.getLocation(name));
+      } else {
+        // Fallback para horario Brasil em offsets nao inteiros
+        tz.setLocalLocation(tz.getLocation('America/Sao_Paulo'));
+      }
+      _timeZoneReady = true;
+    } catch (e) {
+      debugPrint('[Notificacao] Falha ao configurar fuso horario: $e');
+    }
   }
 
   /// Solicita permissao de notificacao (Android 13+)
@@ -78,20 +115,12 @@ class NotificationService {
     // Solicitar permissao na primeira vez
     await _solicitarPermissao();
 
-    // Cancela timer anterior se existir
+    // Agendar lembretes fixos diarios
+    await _agendarLembretesFixos();
+
+    // Cancela timer anterior se existir (mantido apenas por compatibilidade)
     _timerLembrete?.cancel();
-
-    // Verifica a cada 3 horas (3x ao dia em horario comercial ~8h-18h)
-    _timerLembrete = Timer.periodic(
-      const Duration(hours: 3),
-      (_) => _verificarENotificar(),
-    );
-
-    // Primeira verificacao apos 30 minutos do login
-    Future.delayed(
-      const Duration(minutes: 30),
-      () => _verificarENotificar(),
-    );
+    _timerLembrete = null;
 
     debugPrint('[Notificacao] Lembretes iniciados para professor $_professorCodigo');
   }
@@ -101,12 +130,13 @@ class NotificationService {
     _timerLembrete?.cancel();
     _timerLembrete = null;
     _professorCodigo = null;
+    _cancelarLembretesFixos();
     debugPrint('[Notificacao] Lembretes parados');
   }
 
   /// Verificacao disparada quando a internet volta
   Future<void> verificarAoReconectar() async {
-    await _verificarENotificar();
+    await _agendarLembretesFixos();
   }
 
   /// Verifica se ha pendencias e mostra notificacao
@@ -172,4 +202,70 @@ class NotificationService {
 
     debugPrint('[Notificacao] Lembrete mostrado: $titulo');
   }
+
+  Future<void> _agendarLembretesFixos() async {
+    if (!_permissaoConcedida) return;
+    await _configureLocalTimeZone();
+
+    const mensagem = 'Lembrete: abra o app para verificar e sincronizar suas chamadas.';
+    const titulo = 'Lembrete de frequencia';
+
+    const androidDetails = AndroidNotificationDetails(
+      'sync_reminders',
+      'Lembretes de Sincronizacao',
+      channelDescription: 'Lembretes para enviar chamadas registradas offline',
+      importance: Importance.high,
+      priority: Priority.defaultPriority,
+      icon: '@mipmap/ic_launcher',
+    );
+    const iosDetails = DarwinNotificationDetails();
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    for (var i = 0; i < _horariosLembrete.length; i++) {
+      final time = _horariosLembrete[i];
+      final id = _reminderBaseId + i;
+      await _plugin.zonedSchedule(
+        id,
+        titulo,
+        mensagem,
+        _nextInstanceOfTime(time.hour, time.minute),
+        details,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    }
+  }
+
+  Future<void> _cancelarLembretesFixos() async {
+    for (var i = 0; i < _horariosLembrete.length; i++) {
+      await _plugin.cancel(_reminderBaseId + i);
+    }
+  }
+
+  tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
+    if (scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+    return scheduled;
+  }
+}
+
+class _ReminderTime {
+  final int hour;
+  final int minute;
+  const _ReminderTime(this.hour, this.minute);
 }
