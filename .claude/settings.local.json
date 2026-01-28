@@ -3,7 +3,11 @@
     "allow": [
       "Bash(mkdir:*)",
       "Bash(flutter pub:*)",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "Bash(del \"c:\\\\flutter\\\\app-professor-smecel\\\\lib\\\\services\\\\sync_service.dart\")",
+      "Bash(del \"c:\\\\flutter\\\\app-professor-smecel\\\\lib\\\\providers\\\\sync_provider.dart\")",
+      "Bash(ipconfig:*)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

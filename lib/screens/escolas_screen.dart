@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../models/escola.dart';
 import '../services/escola_service.dart';
 import '../widgets/sync_status_widget.dart';
+import '../widgets/offline_banner.dart';
 import 'turmas_screen.dart';
 import 'login_screen.dart';
 
@@ -93,7 +94,12 @@ class _EscolasScreenState extends State<EscolasScreen> {
           ),
         ],
       ),
-      body: _buildBody(),
+      body: Column(
+        children: [
+          const OfflineBanner(),
+          Expanded(child: _buildBody()),
+        ],
+      ),
     );
   }
 

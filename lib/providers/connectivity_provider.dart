@@ -52,11 +52,11 @@ class ConnectivityProvider with ChangeNotifier {
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
       _onConnectivityChanged,
       onError: (error) {
-        print('🚨 Erro no listener de conectividade: $error');
+        debugPrint('[Connectivity] Erro no listener: $error');
       },
     );
     
-    print('🌐 ConnectivityProvider inicializado - Status: $connectionStatus');
+    debugPrint('[Connectivity] Inicializado - Status: $connectionStatus');
   }
   
   Future<void> _checkInitialConnection() async {
@@ -66,7 +66,7 @@ class ConnectivityProvider with ChangeNotifier {
       _wasOffline = !_isConnected;
       notifyListeners();
     } catch (e) {
-      print('❌ Erro ao verificar conectividade inicial: $e');
+      debugPrint('[Connectivity] Erro ao verificar conectividade inicial: $e');
       _isConnected = false;
       _wasOffline = true;
     }
@@ -76,15 +76,11 @@ class ConnectivityProvider with ChangeNotifier {
     final wasConnected = _isConnected;
     _isConnected = result != ConnectivityResult.none;
     
-    print('🔄 Conectividade alterada: $result -> Status: $connectionStatus');
-    
-    // Se ficou online depois de estar offline, fazer sincronização
+    debugPrint('[Connectivity] Alterada: $result -> $connectionStatus');
+
     if (_isConnected && !wasConnected) {
-      print('🔌 Reconectou! Iniciando sincronização automática...');
-      // Manter o flag wasOffline true temporariamente para permitir a sincronização
-      _wasOffline = true; 
-      // A sincronização automática será chamada externamente com o código do professor
-      notifyListeners(); // Notificar mudança para que AuthProvider possa reagir
+      _wasOffline = true;
+      notifyListeners();
     } else {
       _wasOffline = !_isConnected;
       if (!_isConnected || wasConnected) {
@@ -101,7 +97,7 @@ class ConnectivityProvider with ChangeNotifier {
   /// Sincronização automática quando volta a ficar online
   Future<void> _performAutomaticSync([String? professorCodigo]) async {
     if (_isSyncing) {
-      print('⏳ Sincronização já em andamento, ignorando...');
+      debugPrint('[Connectivity] Sync já em andamento, ignorando...');
       return;
     }
     
@@ -118,8 +114,7 @@ class ConnectivityProvider with ChangeNotifier {
       if (result['success']) {
         final details = result['details'] as Map<String, dynamic>?;
         final uploaded = details?['uploaded'] ?? 0;
-        final errors = details?['errors'] ?? 0;
-        
+
         if (uploaded > 0) {
           _setSyncing(false, 'Enviados $uploaded registros offline');
         } else {
@@ -139,7 +134,7 @@ class ConnectivityProvider with ChangeNotifier {
       });
       
     } catch (e) {
-      print('❌ Erro na sincronização automática: $e');
+      debugPrint('[Connectivity] Erro na sincronização automática: $e');
       _setSyncing(false, 'Erro na sincronização automática');
     }
   }

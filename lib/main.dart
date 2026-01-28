@@ -10,7 +10,9 @@ import 'screens/login_screen.dart';
 import 'screens/escolas_screen.dart';
 
 void main() {
-  HttpOverrides.global = DevHttpOverrides();
+  if (kDebugMode) {
+    HttpOverrides.global = DevHttpOverrides();
+  }
   runApp(const MyApp());
 }
 
@@ -70,24 +72,15 @@ class _AuthWrapperState extends State<AuthWrapper> {
     return Consumer2<AuthProvider, ConnectivityProvider>(
       builder: (context, authProvider, connectivityProvider, child) {
         // Listener para reconexão automática
-        print('🔌 MainApp: isConnected=${connectivityProvider.isConnected}, isAuthenticated=${authProvider.isAuthenticated}, isSyncing=${authProvider.isSyncing}, wasOffline=${connectivityProvider.wasOffline}');
-        
-        if (connectivityProvider.isConnected && 
-            authProvider.isAuthenticated && 
+        if (connectivityProvider.isConnected &&
+            authProvider.isAuthenticated &&
             !authProvider.isSyncing) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            // Verificar se acabou de reconectar (foi offline antes)
             if (connectivityProvider.wasOffline) {
-              print('🔌 MainApp: Reconectou! Chamando authProvider.onConnectivityRestored()');
               authProvider.onConnectivityRestored();
-              // Limpar o flag depois da sincronização
               connectivityProvider.clearWasOffline();
-            } else {
-              print('🔌 MainApp: Conectado mas não foi offline antes - wasOffline=${connectivityProvider.wasOffline}');
             }
           });
-        } else {
-          print('🔌 MainApp: Condições não atendidas para sync automático');
         }
         
         if (authProvider.isLoading) {

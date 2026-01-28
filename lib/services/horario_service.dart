@@ -1,11 +1,10 @@
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import '../utils/http_helper.dart';
 import '../models/horario.dart';
 import '../database/database_helper.dart';
 
 class HorarioService {
-  static const String _baseUrl = 'https://smecel.com.br/api/professor';
   final DatabaseHelper _db = DatabaseHelper();
 
   Future<bool> _isConnected() async {
@@ -35,19 +34,15 @@ class HorarioService {
     try {
       final dataFormatada = '${data.year}-${data.month.toString().padLeft(2, '0')}-${data.day.toString().padLeft(2, '0')}';
       
-      final response = await http.post(
-        Uri.parse('$_baseUrl/get_horarios.php'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      final response = await HttpHelper.post(
+        '/get_horarios.php',
+        {
           'professorId': professorIdInt,
           'escolaId': escolaIdInt,
           'turmaId': turmaIdInt,
           'data': dataFormatada,
-        }),
+        },
       );
-
-      // ignore: avoid_print
-      print('GET_HORARIOS BODY: ' + response.body);
 
       final responseData = jsonDecode(response.body);
 

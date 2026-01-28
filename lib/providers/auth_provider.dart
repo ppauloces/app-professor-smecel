@@ -6,12 +6,13 @@ import '../services/full_sync_service.dart';
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
   final FullSyncService _fullSyncService = FullSyncService();
-  
+
   Professor? _professor;
   bool _isLoading = false;
   String? _errorMessage;
   bool _isSyncing = false;
   String? _syncMessage;
+  bool _syncFailed = false;
 
   Professor? get professor => _professor;
   bool get isLoading => _isLoading;
@@ -19,6 +20,9 @@ class AuthProvider with ChangeNotifier {
   bool get isSyncing => _isSyncing;
   String? get syncMessage => _syncMessage;
   bool get isAuthenticated => _professor != null;
+
+  /// Indica se a última tentativa de sync falhou (para exibir aviso na UI)
+  bool get syncFailed => _syncFailed;
 
   Future<void> checkAuthStatus() async {
     _setLoading(true);
@@ -34,15 +38,16 @@ class AuthProvider with ChangeNotifier {
   Future<bool> login(String codigo, String email, String senha) async {
     _setLoading(true);
     _clearError();
-    
+    _syncFailed = false;
+
     try {
       final professor = await _authService.login(codigo, email, senha);
       if (professor != null) {
         _professor = professor;
-        
+
         // SINCRONIZAÇÃO COMPLETA NO LOGIN
         await _performFullSync(codigo);
-        
+
         _setLoading(false);
         return true;
       } else {
@@ -57,41 +62,57 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Realiza sincronização completa dos dados do professor
+  /// Realiza sincronização completa dos dados do professor com retry
   Future<void> _performFullSync(String professorCodigo) async {
     _setSyncing(true, 'Verificando dados locais...');
-    
+
     try {
       final professorId = int.tryParse(professorCodigo) ?? 0;
-      
-      // Verificar se já tem dados locais
+
       final hasLocal = await _fullSyncService.hasLocalData(professorId);
-      
+
       if (!hasLocal) {
-        _setSyncing(true, 'Baixando dados para uso offline...');
-        
-        final result = await _fullSyncService.syncAllData(professorCodigo);
-        
-        if (result['success']) {
+        _setSyncing(true, 'Baixando escolas, turmas e horários...');
+
+        // Tentar até 2 vezes
+        Map<String, dynamic>? result;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+          result = await _fullSyncService.syncAllData(
+            professorCodigo,
+            syncAlunos: false,
+          );
+
+          if (result['success'] == true) {
+            break;
+          }
+
+          if (attempt < 2) {
+            _setSyncing(true, 'Tentando novamente...');
+            await Future.delayed(const Duration(seconds: 2));
+          }
+        }
+
+        if (result != null && result['success'] == true) {
           final details = result['details'] as Map<String, dynamic>;
-          _setSyncing(true, 'Dados sincronizados: ${details['escolas']} escolas, ${details['turmas']} turmas, ${details['horarios']} horários');
-          
-          // Aguardar um pouco para mostrar a mensagem de sucesso
-          await Future.delayed(Duration(seconds: 2));
+          _setSyncing(true, 'Dados sincronizados: ${details['escolas']} escolas, ${details['turmas']} turmas');
+          _syncFailed = false;
+          await Future.delayed(const Duration(seconds: 2));
         } else {
-          print('Falha na sincronização: ${result['message']}');
-          // Continua mesmo se a sincronização falhar, para permitir uso online
+          _syncFailed = true;
+          _setSyncing(true, 'Falha ao baixar dados. Verifique sua conexão.');
+          await Future.delayed(const Duration(seconds: 2));
         }
       } else {
         _setSyncing(true, 'Dados offline disponíveis');
-        await Future.delayed(Duration(seconds: 1));
+        _syncFailed = false;
+        await Future.delayed(const Duration(seconds: 1));
       }
-      
+
     } catch (e) {
-      print('Erro na sincronização: $e');
-      // Continua mesmo se a sincronização falhar
+      debugPrint('Erro na sincronização: $e');
+      _syncFailed = true;
     }
-    
+
     _setSyncing(false, null);
   }
 
@@ -100,6 +121,7 @@ class AuthProvider with ChangeNotifier {
     try {
       await _authService.logout();
       _professor = null;
+      _syncFailed = false;
       _clearError();
     } catch (e) {
       _setError('Erro durante logout: $e');
@@ -135,74 +157,79 @@ class AuthProvider with ChangeNotifier {
   /// Força re-sincronização completa (limpa cache e baixa tudo novamente)
   Future<void> forceFullSync() async {
     if (_professor == null) return;
-    
+
     _setSyncing(true, 'Limpando cache local...');
-    
+
     try {
       final professorId = int.tryParse(_professor!.codigo) ?? 0;
       await _fullSyncService.clearCache(professorId);
-      
+
       _setSyncing(true, 'Re-sincronizando dados...');
-      final result = await _fullSyncService.syncAllData(_professor!.codigo);
-      
+      final result = await _fullSyncService.syncAllData(
+        _professor!.codigo,
+        syncAlunos: true,
+      );
+
       if (result['success']) {
         final details = result['details'] as Map<String, dynamic>;
+        _syncFailed = false;
         _setSyncing(true, 'Sincronização completa: ${details['escolas']} escolas, ${details['turmas']} turmas, ${details['horarios']} horários');
-        await Future.delayed(Duration(seconds: 2));
+        await Future.delayed(const Duration(seconds: 2));
       } else {
+        _syncFailed = true;
         _setError('Erro na re-sincronização: ${result['message']}');
       }
     } catch (e) {
+      _syncFailed = true;
       _setError('Erro na re-sincronização: $e');
     }
-    
+
     _setSyncing(false, null);
   }
 
   /// Método chamado quando a conectividade é restaurada
   Future<void> onConnectivityRestored() async {
-    print('🔄 AuthProvider.onConnectivityRestored: INICIADO - professor: ${_professor?.codigo}, isSyncing: $_isSyncing');
-    
     if (_professor != null && !_isSyncing) {
-      print('📱 Conectividade restaurada, iniciando sincronização automática...');
-      print('🔄 AuthProvider.onConnectivityRestored: chamando syncIncremental');
-      
+      debugPrint('[AuthProvider] Conectividade restaurada, iniciando sync incremental...');
+
       _setSyncing(true, 'Enviando dados offline...');
-      
+
       try {
-        print('🔄 AuthProvider: antes de chamar syncIncremental');
         final result = await _fullSyncService.syncIncremental(_professor!.codigo);
-        print('🔄 AuthProvider: depois de chamar syncIncremental - result: $result');
-        
+
         if (result['success']) {
           final details = result['details'] as Map<String, dynamic>?;
           final uploaded = details?['uploaded'] ?? 0;
-          
+
           if (uploaded > 0) {
             _setSyncing(false, 'Enviados $uploaded registros offline');
           } else {
             _setSyncing(false, 'Dados sincronizados');
           }
+
+          // Se sync tinha falhado antes, tentar full sync agora
+          if (_syncFailed) {
+            _setSyncing(true, 'Baixando dados pendentes...');
+            await _performFullSync(_professor!.codigo);
+          }
         } else {
           _setSyncing(false, 'Erro na sincronização');
         }
-        
+
         // Limpar mensagem após 3 segundos
-        Future.delayed(Duration(seconds: 3), () {
-          if (_syncMessage?.contains('Enviados') == true || 
+        Future.delayed(const Duration(seconds: 3), () {
+          if (_syncMessage?.contains('Enviados') == true ||
               _syncMessage == 'Dados sincronizados' ||
               _syncMessage == 'Erro na sincronização') {
             _syncMessage = null;
             notifyListeners();
           }
         });
-        
+
       } catch (e) {
         _setSyncing(false, 'Erro na sincronização automática');
-        print('❌ Erro na sincronização automática: $e');
+        debugPrint('Erro na sincronização automática: $e');
       }
-    } else {
-      print('🔄 AuthProvider.onConnectivityRestored: NÃO EXECUTADO - professor: ${_professor?.codigo}, isSyncing: $_isSyncing');
     }
   }
 }

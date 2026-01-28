@@ -1,26 +1,18 @@
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../utils/http_helper.dart';
 import '../models/escola.dart';
 
 class EscolaService {
-  static const String _baseUrl = 'https://smecel.com.br/api/professor';
-
   Future<List<Escola>> getEscolasByProfessor(String codigoProfessor) async {
     try {
-      // Muitos endpoints PHP esperam form-urlencoded, não JSON.
-      final response = await http.post(
-        Uri.parse('$_baseUrl/get_escolas.php'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'codigo': codigoProfessor}),
+      final response = await HttpHelper.post(
+        '/get_escolas.php',
+        {'codigo': codigoProfessor},
       );
 
       if (response.statusCode != 200) {
         throw Exception('HTTP ${response.statusCode}: ${response.reasonPhrase}');
       }
-
-      // Log simples do corpo, útil para diagnosticar tipos inesperados
-      // ignore: avoid_print
-      //print('GET_ESCOLAS BODY: '+response.body);
 
       final decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) {

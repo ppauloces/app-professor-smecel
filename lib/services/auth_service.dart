@@ -1,23 +1,22 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../utils/http_helper.dart';
 import '../models/professor.dart';
 
 class AuthService {
   static const String _keyProfessorCodigo = 'professor_codigo';
   static const String _keyProfessorEmail = 'professor_email';
-  static const String _baseUrl = 'https://smecel.com.br/api/professor';
 
   Future<Professor?> login(String codigo, String email, String senha) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/login.php'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      final response = await HttpHelper.post(
+        '/login.php',
+        {
           'codigo': codigo,
           'email': email,
           'senha': senha,
-        }),
+        },
       );
 
       final data = jsonDecode(response.body);
@@ -36,7 +35,7 @@ class AuthService {
       
       return null;
     } catch (e) {
-      print('Erro no login: $e');
+      debugPrint('Erro no login: $e');
       return null;
     }
   }

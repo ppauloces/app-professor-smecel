@@ -1,5 +1,159 @@
 <?php
 
+if (!empty($_POST["batch"])) {
+
+    require_once('../../../../Connections/SmecelNovoPDO.php');
+    require_once('../../../../sistema/funcoes/ProfessorLogger.php');
+    include "../../conf/session.php";
+
+    $data = isset($_POST['data']) ? $_POST['data'] : null;
+    $disciplina = isset($_POST['disciplina']) ? $_POST['disciplina'] : null;
+    $turma = isset($_POST['turma']) ? $_POST['turma'] : null;
+    $prof = isset($_POST['prof']) ? $_POST['prof'] : null;
+    $ano = isset($_POST['ano']) ? $_POST['ano'] : null;
+    $aulas = isset($_POST['aulas']) ? $_POST['aulas'] : [];
+    $registros = isset($_POST['registros']) ? $_POST['registros'] : [];
+
+    if (!is_array($aulas)) {
+        $aulas = [$aulas];
+    }
+    if (!is_array($registros)) {
+        $registros = [$registros];
+    }
+
+    if (empty($data) || empty($disciplina) || empty($turma) || empty($prof) || empty($ano) || empty($aulas) || empty($registros)) {
+        echo json_encode(['status' => 'error', 'message' => 'Dados incompletos']);
+        exit;
+    }
+
+    try {
+        $SmecelNovo->beginTransaction();
+
+        $query_Verifica = "
+            SELECT faltas_alunos_id
+            FROM smc_faltas_alunos
+            WHERE faltas_alunos_matricula_id = :matricula
+              AND faltas_alunos_data = :data
+              AND faltas_alunos_numero_aula = :aula_numero";
+        $stmtVerifica = $SmecelNovo->prepare($query_Verifica);
+
+        $insertSQL = "
+            INSERT INTO smc_faltas_alunos
+                (faltas_alunos_matricula_id, faltas_alunos_disciplina_id, faltas_alunos_numero_aula, faltas_alunos_data)
+            VALUES
+                (:matricula, :disciplina, :aula_numero, :data)";
+        $stmtInsert = $SmecelNovo->prepare($insertSQL);
+
+        $totalInseridos = 0;
+
+        foreach ($registros as $reg) {
+            if (empty($reg['matricula'])) {
+                continue;
+            }
+
+            foreach ($aulas as $aulaNumero) {
+                $stmtVerifica->execute([
+                    ':matricula' => $reg['matricula'],
+                    ':data' => $data,
+                    ':aula_numero' => $aulaNumero
+                ]);
+
+                if (!$stmtVerifica->fetch()) {
+                    $stmtInsert->execute([
+                        ':matricula' => $reg['matricula'],
+                        ':disciplina' => $disciplina,
+                        ':aula_numero' => $aulaNumero,
+                        ':data' => $data
+                    ]);
+                    $totalInseridos++;
+                }
+            }
+        }
+
+        $diaSemana = date("w", strtotime($data));
+        $queryTurmaEscola = "
+            SELECT turma_id_escola
+            FROM smc_turma
+            WHERE turma_id = :turma_id";
+        $stmtTurmaEscola = $SmecelNovo->prepare($queryTurmaEscola);
+        $stmtTurmaEscola->execute([':turma_id' => $turma]);
+        $turmaEscola = $stmtTurmaEscola->fetch(PDO::FETCH_ASSOC);
+        $escolaId = $turmaEscola ? $turmaEscola['turma_id_escola'] : null;
+
+        $queryLotacoes = "
+            SELECT ch_lotacao_id, ch_lotacao_aula
+            FROM smc_ch_lotacao_professor
+            INNER JOIN smc_turma ON turma_id = ch_lotacao_turma_id
+            WHERE ch_lotacao_professor_id = :professor
+              AND ch_lotacao_turma_id = :turma
+              AND ch_lotacao_disciplina_id = :disciplina
+              AND ch_lotacao_dia = :dia
+              AND turma_ano_letivo = :ano";
+        $stmtLotacoes = $SmecelNovo->prepare($queryLotacoes);
+        $stmtLotacoes->execute([
+            ':professor' => $prof,
+            ':turma' => $turma,
+            ':disciplina' => $disciplina,
+            ':dia' => $diaSemana,
+            ':ano' => $ano
+        ]);
+        $lotacoes = $stmtLotacoes->fetchAll(PDO::FETCH_ASSOC);
+        $lotacoesPorAula = [];
+        foreach ($lotacoes as $lotacao) {
+            $lotacoesPorAula[$lotacao['ch_lotacao_aula']] = $lotacao['ch_lotacao_id'];
+        }
+
+        $insertConfirmacao = "
+            INSERT IGNORE INTO smc_frequencia_confirmacao
+                (conf_professor_id, conf_escola_id, conf_turma_id, conf_disciplina_id, conf_ch_lotacao_id, conf_data, conf_confirmado_em, conf_ip, conf_user_agent)
+            VALUES
+                (:professor, :escola, :turma, :disciplina, :lotacao, :data, NOW(), :ip, :user_agent)";
+        $stmtConfirmacao = $SmecelNovo->prepare($insertConfirmacao);
+        $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : null;
+        $userAgent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : null;
+
+        foreach ($aulas as $aulaNumero) {
+            if (!isset($lotacoesPorAula[$aulaNumero])) {
+                continue;
+            }
+            $stmtConfirmacao->execute([
+                ':professor' => $prof,
+                ':escola' => $escolaId,
+                ':turma' => $turma,
+                ':disciplina' => $disciplina,
+                ':lotacao' => $lotacoesPorAula[$aulaNumero],
+                ':data' => $data,
+                ':ip' => $ip,
+                ':user_agent' => $userAgent
+            ]);
+        }
+
+        $SmecelNovo->commit();
+
+        try {
+            $logger = new ProfessorLogger($SmecelNovo, $row_ProfLogado['func_id'], isset($row_ProfLogado['func_escola_id']) ? $row_ProfLogado['func_escola_id'] : null);
+            $logger->logFrequencia('lancou', [
+                'data_aula' => $data,
+                'disciplina_id' => $disciplina,
+                'turma_id' => $turma,
+                'tipo_frequencia' => 'batch',
+                'total_aulas' => count($aulas),
+                'total_alunos' => count($registros),
+                'total_inserts' => $totalInseridos
+            ]);
+        } catch (Exception $e) {
+            error_log("Erro ao registrar log batch: " . $e->getMessage());
+        }
+
+        echo json_encode(['status' => 'ok', 'inseridos' => $totalInseridos]);
+        exit;
+    } catch (Exception $e) {
+        $SmecelNovo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        exit;
+    }
+}
+
 if (isset($_POST["matricula"])) {
 
     require_once('../../../../Connections/SmecelNovoPDO.php');

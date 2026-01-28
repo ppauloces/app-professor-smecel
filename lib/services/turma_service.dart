@@ -1,11 +1,10 @@
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import '../utils/http_helper.dart';
 import '../models/turma.dart';
 import '../database/database_helper.dart';
 
 class TurmaService {
-  static const String _baseUrl = 'https://smecel.com.br/api/professor';
   final DatabaseHelper _db = DatabaseHelper();
 
   Future<bool> _isConnected() async {
@@ -27,21 +26,17 @@ class TurmaService {
     }
 
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/get_turmas.php'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      final response = await HttpHelper.post(
+        '/get_turmas.php',
+        {
           'codigo': codigoProfessor,
           'escola': escolaId,
-        }),
+        },
       );
 
       if (response.statusCode != 200) {
         throw Exception('HTTP ${response.statusCode}: ${response.reasonPhrase}');
       }
-
-      // ignore: avoid_print
-      print('GET_TURMAS BODY: ' + response.body);
 
       final decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) {

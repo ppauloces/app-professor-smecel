@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/professor.dart';
@@ -24,7 +25,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'frequencia_escolar.db');
     return await openDatabase(
       path,
-      version: 4, // bump p/ garantir criação de faltas_local em bases existentes
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -155,22 +156,116 @@ class DatabaseHelper {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // Migrações incrementais — cada bloco roda apenas se a versão antiga for menor.
+    // NUNCA apagar tabelas que já contêm dados do usuário.
+
     if (oldVersion < 3) {
-      // Recriação completa para bases muito antigas
-      await db.execute('DROP TABLE IF EXISTS frequencias');
-      await db.execute('DROP TABLE IF EXISTS frequencias_pendentes');
-      await db.execute('DROP TABLE IF EXISTS faltas_local');
-      await db.execute('DROP TABLE IF EXISTS aulas');
-      await db.execute('DROP TABLE IF EXISTS alunos');
-      await db.execute('DROP TABLE IF EXISTS horarios');
-      await db.execute('DROP TABLE IF EXISTS turmas');
-      await db.execute('DROP TABLE IF EXISTS escolas');
-      await db.execute('DROP TABLE IF EXISTS professores');
-      await _onCreate(db, newVersion);
+      // Versões muito antigas (1-2): garantir que todas as tabelas existem.
+      // Usa CREATE TABLE IF NOT EXISTS para não perder dados caso já existam.
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS professores(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nome TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          senha TEXT NOT NULL,
+          sincronizado INTEGER NOT NULL DEFAULT 0,
+          criado_em TEXT
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS escolas(
+          id INTEGER PRIMARY KEY,
+          nome TEXT NOT NULL,
+          professor_id INTEGER NOT NULL,
+          sincronizado INTEGER NOT NULL DEFAULT 0,
+          criado_em TEXT,
+          FOREIGN KEY (professor_id) REFERENCES professores (id)
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS turmas(
+          id INTEGER PRIMARY KEY,
+          nome TEXT NOT NULL,
+          turno TEXT NOT NULL,
+          ano_letivo INTEGER NOT NULL,
+          escola_id INTEGER NOT NULL,
+          professor_id INTEGER NOT NULL,
+          sincronizado INTEGER NOT NULL DEFAULT 0,
+          criado_em TEXT,
+          FOREIGN KEY (escola_id) REFERENCES escolas (id),
+          FOREIGN KEY (professor_id) REFERENCES professores (id)
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS horarios(
+          id INTEGER PRIMARY KEY,
+          disciplina_id INTEGER NOT NULL,
+          numero_aula INTEGER NOT NULL,
+          dia_semana INTEGER NOT NULL,
+          disciplina_nome TEXT NOT NULL,
+          turma_id INTEGER NOT NULL,
+          escola_id INTEGER NOT NULL,
+          professor_id INTEGER NOT NULL,
+          sincronizado INTEGER NOT NULL DEFAULT 0,
+          criado_em TEXT,
+          FOREIGN KEY (turma_id) REFERENCES turmas (id),
+          FOREIGN KEY (escola_id) REFERENCES escolas (id),
+          FOREIGN KEY (professor_id) REFERENCES professores (id)
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS alunos(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nome TEXT NOT NULL,
+          matricula TEXT NOT NULL,
+          turma_id INTEGER NOT NULL,
+          sincronizado INTEGER NOT NULL DEFAULT 0,
+          criado_em TEXT,
+          FOREIGN KEY (turma_id) REFERENCES turmas (id)
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS aulas(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          data TEXT NOT NULL,
+          titulo TEXT NOT NULL,
+          observacoes TEXT,
+          turma_id INTEGER NOT NULL,
+          sincronizado INTEGER NOT NULL DEFAULT 0,
+          criado_em TEXT,
+          FOREIGN KEY (turma_id) REFERENCES turmas (id)
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS frequencias(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          aluno_id INTEGER NOT NULL,
+          aula_id INTEGER NOT NULL,
+          presente INTEGER NOT NULL,
+          observacoes TEXT,
+          sincronizado INTEGER NOT NULL DEFAULT 0,
+          criado_em TEXT,
+          FOREIGN KEY (aluno_id) REFERENCES alunos (id),
+          FOREIGN KEY (aula_id) REFERENCES aulas (id),
+          UNIQUE(aluno_id, aula_id)
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS frequencias_pendentes(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          professor_id INTEGER NOT NULL,
+          turma_id INTEGER NOT NULL,
+          disciplina_id INTEGER NOT NULL,
+          data TEXT NOT NULL,
+          aula_numero INTEGER NOT NULL,
+          presencas TEXT NOT NULL,
+          sincronizado INTEGER NOT NULL DEFAULT 0,
+          criado_em TEXT
+        )
+      ''');
     }
 
     if (oldVersion < 4) {
-      // Migração leve: apenas garantir a tabela de faltas_local
       await db.execute('''
         CREATE TABLE IF NOT EXISTS faltas_local(
           matricula_id INTEGER NOT NULL,
@@ -181,9 +276,19 @@ class DatabaseHelper {
         )
       ''');
     }
-  }
 
-  Future<void> _insertSampleData(Database db) async {}
+    if (oldVersion < 5) {
+      // v5: adicionar updated_at para resolução de conflitos futura
+      final tables = ['escolas', 'turmas', 'horarios', 'alunos', 'frequencias_pendentes'];
+      for (final table in tables) {
+        try {
+          await db.execute('ALTER TABLE $table ADD COLUMN updated_at TEXT');
+        } catch (_) {
+          // Coluna já existe — ignora
+        }
+      }
+    }
+  }
 
   Future<int> insertProfessor(Professor professor) async {
     final db = await database;
@@ -297,7 +402,7 @@ class DatabaseHelper {
       
       // Tratar tanto null quanto string "null" como inválidos
       if (nome == null || nome.isEmpty || nome.toLowerCase() == 'null' || alunoId == null) {
-        print('⚠️ Aluno com dados inválidos ignorado: nome="$nome", id="$alunoId"');
+        debugPrint('[DB] Aluno com dados inválidos ignorado: nome="$nome", id="$alunoId"');
         alunosInvalidos++;
         continue;
       }
@@ -313,12 +418,12 @@ class DatabaseHelper {
         });
         alunosValidos++;
       } catch (e) {
-        print('❌ Erro ao inserir aluno "$nome": $e');
+        debugPrint('[DB] Erro ao inserir aluno "$nome": $e');
         alunosInvalidos++;
       }
     }
     
-    print('💾 Alunos salvos: $alunosValidos válidos, $alunosInvalidos inválidos');
+    debugPrint('[DB] Alunos salvos: $alunosValidos válidos, $alunosInvalidos inválidos');
   }
 
   Future<List<Map<String, dynamic>>> getAlunosCached(int turmaId, int disciplinaId, DateTime data, int aulaNumero) async {
