@@ -15,7 +15,8 @@ class EscolaService {
       );
 
       if (response.statusCode != 200) {
-        throw Exception('HTTP ${response.statusCode}: ${response.reasonPhrase}');
+        throw Exception(
+            'HTTP ${response.statusCode}: ${response.reasonPhrase}');
       }
 
       // Log simples do corpo, útil para diagnosticar tipos inesperados
@@ -36,7 +37,7 @@ class EscolaService {
       final List<dynamic> list = raw is List
           ? raw
           : raw is Map
-              ? (raw as Map).values.toList()
+              ? (raw).values.toList()
               : <dynamic>[];
 
       final List<Escola> escolas = [];

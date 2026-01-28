@@ -33,8 +33,9 @@ class HorarioService {
     }
 
     try {
-      final dataFormatada = '${data.year}-${data.month.toString().padLeft(2, '0')}-${data.day.toString().padLeft(2, '0')}';
-      
+      final dataFormatada =
+          '${data.year}-${data.month.toString().padLeft(2, '0')}-${data.day.toString().padLeft(2, '0')}';
+
       final response = await http.post(
         Uri.parse('$_baseUrl/get_horarios.php'),
         headers: {'Content-Type': 'application/json'},
@@ -47,7 +48,7 @@ class HorarioService {
       );
 
       // ignore: avoid_print
-      print('GET_HORARIOS BODY: ' + response.body);
+      print('GET_HORARIOS BODY: ${response.body}');
 
       final responseData = jsonDecode(response.body);
 
@@ -56,7 +57,7 @@ class HorarioService {
         final List<dynamic> list = raw is List
             ? raw
             : raw is Map
-                ? (raw as Map).values.toList()
+                ? (raw).values.toList()
                 : <dynamic>[];
 
         final List<Map<String, dynamic>> horariosData = [];
@@ -67,7 +68,8 @@ class HorarioService {
             item.forEach((k, v) => map[k.toString()] = v);
             horariosData.add({
               'ch_lotacao_id': map['ch_lotacao_id']?.toString(),
-              'ch_lotacao_disciplina_id': map['ch_lotacao_disciplina_id']?.toString(),
+              'ch_lotacao_disciplina_id':
+                  map['ch_lotacao_disciplina_id']?.toString(),
               'ch_lotacao_aula': map['ch_lotacao_aula']?.toString(),
               'ch_lotacao_dia': map['ch_lotacao_dia']?.toString(),
               'disciplina_nome': map['disciplina_nome']?.toString(),
@@ -76,9 +78,12 @@ class HorarioService {
         }
 
         // SALVAR NO CACHE LOCAL
-        await _db.saveHorarios(horariosData, turmaIdInt, escolaIdInt, professorIdInt);
+        await _db.saveHorarios(
+            horariosData, turmaIdInt, escolaIdInt, professorIdInt);
 
-        return horariosData.map((horarioJson) => Horario.fromMap(horarioJson)).toList();
+        return horariosData
+            .map((horarioJson) => Horario.fromMap(horarioJson))
+            .toList();
       } else {
         throw Exception(responseData['message'] ?? 'Erro ao carregar horários');
       }
@@ -97,10 +102,13 @@ class HorarioService {
     try {
       // USAR DADOS REAIS DO CACHE
       final diaSemana = data.weekday;
-      final horariosCached = await _db.getHorariosCached(turmaId, escolaId, professorId, diaSemana);
-      
+      final horariosCached = await _db.getHorariosCached(
+          turmaId, escolaId, professorId, diaSemana);
+
       if (horariosCached.isNotEmpty) {
-        return horariosCached.map((horarioJson) => Horario.fromMap(horarioJson)).toList();
+        return horariosCached
+            .map((horarioJson) => Horario.fromMap(horarioJson))
+            .toList();
       }
     } catch (e) {
       // Se não conseguir do cache, usar dados mockados como fallback

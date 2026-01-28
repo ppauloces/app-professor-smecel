@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'utils/http_overrides.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -70,26 +69,29 @@ class _AuthWrapperState extends State<AuthWrapper> {
     return Consumer2<AuthProvider, ConnectivityProvider>(
       builder: (context, authProvider, connectivityProvider, child) {
         // Listener para reconexão automática
-        print('🔌 MainApp: isConnected=${connectivityProvider.isConnected}, isAuthenticated=${authProvider.isAuthenticated}, isSyncing=${authProvider.isSyncing}, wasOffline=${connectivityProvider.wasOffline}');
-        
-        if (connectivityProvider.isConnected && 
-            authProvider.isAuthenticated && 
+        print(
+            '🔌 MainApp: isConnected=${connectivityProvider.isConnected}, isAuthenticated=${authProvider.isAuthenticated}, isSyncing=${authProvider.isSyncing}, wasOffline=${connectivityProvider.wasOffline}');
+
+        if (connectivityProvider.isConnected &&
+            authProvider.isAuthenticated &&
             !authProvider.isSyncing) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             // Verificar se acabou de reconectar (foi offline antes)
             if (connectivityProvider.wasOffline) {
-              print('🔌 MainApp: Reconectou! Chamando authProvider.onConnectivityRestored()');
+              print(
+                  '🔌 MainApp: Reconectou! Chamando authProvider.onConnectivityRestored()');
               authProvider.onConnectivityRestored();
               // Limpar o flag depois da sincronização
               connectivityProvider.clearWasOffline();
             } else {
-              print('🔌 MainApp: Conectado mas não foi offline antes - wasOffline=${connectivityProvider.wasOffline}');
+              print(
+                  '🔌 MainApp: Conectado mas não foi offline antes - wasOffline=${connectivityProvider.wasOffline}');
             }
           });
         } else {
           print('🔌 MainApp: Condições não atendidas para sync automático');
         }
-        
+
         if (authProvider.isLoading) {
           return const Scaffold(
             body: Center(

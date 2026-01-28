@@ -32,12 +32,14 @@ class Horario {
   factory Horario.fromMap(Map<String, dynamic> map) {
     return Horario(
       id: _parseId(map['ch_lotacao_id'] ?? map['id']),
-      disciplinaId: _parseId(map['ch_lotacao_disciplina_id'] ?? map['disciplina_id']),
+      disciplinaId:
+          _parseId(map['ch_lotacao_disciplina_id'] ?? map['disciplina_id']),
       numeroAula: _parseId(map['ch_lotacao_aula'] ?? map['numero_aula']),
       diaSemana: _parseId(map['ch_lotacao_dia'] ?? map['dia_semana']),
       disciplinaNome: map['disciplina_nome'] ?? '',
       sincronizado: map['sincronizado'] == 1,
-      criadoEm: map['criado_em'] != null ? DateTime.parse(map['criado_em']) : null,
+      criadoEm:
+          map['criado_em'] != null ? DateTime.parse(map['criado_em']) : null,
     );
   }
 
@@ -70,7 +72,7 @@ class Horario {
     );
   }
 
-  String get aulaLabel => '${numeroAula}ª aula - $disciplinaNome';
+  String get aulaLabel => '$numeroAulaª aula - $disciplinaNome';
 
   @override
   String toString() {

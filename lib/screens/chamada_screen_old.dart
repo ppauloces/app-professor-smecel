@@ -19,7 +19,8 @@ class _ChamadaScreenState extends State<ChamadaScreen> {
   @override
   void initState() {
     super.initState();
-    _tituloController.text = 'Aula de ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}';
+    _tituloController.text =
+        'Aula de ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}';
     _carregarAlunos();
   }
 
@@ -30,8 +31,9 @@ class _ChamadaScreenState extends State<ChamadaScreen> {
   }
 
   Future<void> _carregarAlunos() async {
-    final frequenciaProvider = Provider.of<FrequenciaProvider>(context, listen: false);
-    await frequenciaProvider.carregarAlunos(widget.turma.id!);
+    final frequenciaProvider =
+        Provider.of<FrequenciaProvider>(context, listen: false);
+    await frequenciaProvider.carregarAlunos(widget.turma.id);
   }
 
   Future<void> _iniciarAula() async {
@@ -45,10 +47,11 @@ class _ChamadaScreenState extends State<ChamadaScreen> {
       return;
     }
 
-    final frequenciaProvider = Provider.of<FrequenciaProvider>(context, listen: false);
-    
+    final frequenciaProvider =
+        Provider.of<FrequenciaProvider>(context, listen: false);
+
     await frequenciaProvider.iniciarAula(
-      turmaId: widget.turma.id!,
+      turmaId: widget.turma.id,
       titulo: _tituloController.text.trim(),
     );
 
@@ -60,12 +63,13 @@ class _ChamadaScreenState extends State<ChamadaScreen> {
   }
 
   void _marcarTodosPresentes() {
-    final frequenciaProvider = Provider.of<FrequenciaProvider>(context, listen: false);
-    
+    final frequenciaProvider =
+        Provider.of<FrequenciaProvider>(context, listen: false);
+
     for (final aluno in frequenciaProvider.alunos) {
-      if (!frequenciaProvider.isPresente(aluno.id!)) {
+      if (!frequenciaProvider.isPresente(aluno.id)) {
         frequenciaProvider.registrarFrequencia(
-          alunoId: aluno.id!,
+          alunoId: aluno.id,
           presente: true,
         );
       }
@@ -73,12 +77,13 @@ class _ChamadaScreenState extends State<ChamadaScreen> {
   }
 
   void _marcarTodosFaltosos() {
-    final frequenciaProvider = Provider.of<FrequenciaProvider>(context, listen: false);
-    
+    final frequenciaProvider =
+        Provider.of<FrequenciaProvider>(context, listen: false);
+
     for (final aluno in frequenciaProvider.alunos) {
-      if (frequenciaProvider.isPresente(aluno.id!)) {
+      if (frequenciaProvider.isPresente(aluno.id)) {
         frequenciaProvider.registrarFrequencia(
-          alunoId: aluno.id!,
+          alunoId: aluno.id,
           presente: false,
         );
       }
@@ -90,7 +95,8 @@ class _ChamadaScreenState extends State<ChamadaScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Finalizar Aula'),
-        content: const Text('Deseja finalizar a aula? Os dados serão salvos automaticamente.'),
+        content: const Text(
+            'Deseja finalizar a aula? Os dados serão salvos automaticamente.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -98,13 +104,15 @@ class _ChamadaScreenState extends State<ChamadaScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              final frequenciaProvider = Provider.of<FrequenciaProvider>(context, listen: false);
+              final frequenciaProvider =
+                  Provider.of<FrequenciaProvider>(context, listen: false);
               frequenciaProvider.finalizarAula();
               Navigator.of(context).pop();
               Navigator.of(context).pop();
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-            child: const Text('Finalizar', style: TextStyle(color: Colors.white)),
+            child:
+                const Text('Finalizar', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -118,55 +126,57 @@ class _ChamadaScreenState extends State<ChamadaScreen> {
         title: Text(widget.turma.nome),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
-        actions: _aulaIniciada ? [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              switch (value) {
-                case 'todos_presentes':
-                  _marcarTodosPresentes();
-                  break;
-                case 'todos_faltosos':
-                  _marcarTodosFaltosos();
-                  break;
-                case 'finalizar':
-                  _finalizarAula();
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'todos_presentes',
-                child: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Todos presentes'),
+        actions: _aulaIniciada
+            ? [
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'todos_presentes':
+                        _marcarTodosPresentes();
+                        break;
+                      case 'todos_faltosos':
+                        _marcarTodosFaltosos();
+                        break;
+                      case 'finalizar':
+                        _finalizarAula();
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'todos_presentes',
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green),
+                          SizedBox(width: 8),
+                          Text('Todos presentes'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'todos_faltosos',
+                      child: Row(
+                        children: [
+                          Icon(Icons.cancel, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Todos faltosos'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'finalizar',
+                      child: Row(
+                        children: [
+                          Icon(Icons.save),
+                          SizedBox(width: 8),
+                          Text('Finalizar aula'),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'todos_faltosos',
-                child: Row(
-                  children: [
-                    Icon(Icons.cancel, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Todos faltosos'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'finalizar',
-                child: Row(
-                  children: [
-                    Icon(Icons.save),
-                    SizedBox(width: 8),
-                    Text('Finalizar aula'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ] : null,
+              ]
+            : null,
       ),
       body: Consumer<FrequenciaProvider>(
         builder: (context, frequenciaProvider, child) {
@@ -266,7 +276,7 @@ class _ChamadaScreenState extends State<ChamadaScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '${alunos.where((a) => frequenciaProvider.isPresente(a.id!)).length} presentes de ${alunos.length} alunos',
+                      '${alunos.where((a) => frequenciaProvider.isPresente(a.id)).length} presentes de ${alunos.length} alunos',
                       style: TextStyle(
                         color: Colors.blue.shade700,
                         fontWeight: FontWeight.w500,
@@ -281,14 +291,15 @@ class _ChamadaScreenState extends State<ChamadaScreen> {
                   itemCount: alunos.length,
                   itemBuilder: (context, index) {
                     final aluno = alunos[index];
-                    final isPresente = frequenciaProvider.isPresente(aluno.id!);
-                    
+                    final isPresente = frequenciaProvider.isPresente(aluno.id);
+
                     return Card(
                       elevation: 2,
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: isPresente ? Colors.green : Colors.grey,
+                          backgroundColor:
+                              isPresente ? Colors.green : Colors.grey,
                           child: Text(
                             aluno.nome.substring(0, 1).toUpperCase(),
                             style: const TextStyle(
@@ -306,14 +317,14 @@ class _ChamadaScreenState extends State<ChamadaScreen> {
                           value: isPresente,
                           onChanged: (value) {
                             frequenciaProvider.registrarFrequencia(
-                              alunoId: aluno.id!,
+                              alunoId: aluno.id,
                               presente: value,
                             );
                           },
-                          activeColor: Colors.green,
+                          activeThumbColor: Colors.green,
                         ),
                         onTap: () {
-                          frequenciaProvider.toggleFrequencia(aluno.id!);
+                          frequenciaProvider.toggleFrequencia(aluno.id);
                         },
                       ),
                     );

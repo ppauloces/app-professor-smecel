@@ -17,7 +17,8 @@ class TurmaService {
     }
   }
 
-  Future<List<Turma>> getTurmasByEscola(String codigoProfessor, String escolaId) async {
+  Future<List<Turma>> getTurmasByEscola(
+      String codigoProfessor, String escolaId) async {
     final professorId = int.tryParse(codigoProfessor) ?? 0;
     final escolaIdInt = int.tryParse(escolaId) ?? 0;
 
@@ -37,23 +38,24 @@ class TurmaService {
       );
 
       if (response.statusCode != 200) {
-        throw Exception('HTTP ${response.statusCode}: ${response.reasonPhrase}');
+        throw Exception(
+            'HTTP ${response.statusCode}: ${response.reasonPhrase}');
       }
 
       // ignore: avoid_print
-      print('GET_TURMAS BODY: ' + response.body);
+      print('GET_TURMAS BODY: ${response.body}');
 
       final decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) {
         throw Exception('Resposta inesperada do servidor.');
       }
-      
+
       if (decoded['status'] == 'success') {
         final raw = decoded['turmas'];
         final List<dynamic> list = raw is List
             ? raw
             : raw is Map
-                ? (raw as Map).values.toList()
+                ? (raw).values.toList()
                 : <dynamic>[];
 
         final List<Map<String, dynamic>> turmasData = [];
@@ -77,10 +79,10 @@ class TurmaService {
             throw Exception('Item inválido na posição $i: $item');
           }
         }
-        
+
         // SALVAR NO CACHE LOCAL
         await _db.saveTurmas(turmasData, escolaIdInt, professorId);
-        
+
         return turmasData.map((turmaJson) => Turma.fromMap(turmaJson)).toList();
       } else {
         throw Exception(decoded['message'] ?? 'Erro ao carregar turmas');
@@ -95,9 +97,11 @@ class TurmaService {
     try {
       // USAR DADOS REAIS DO CACHE
       final turmasCached = await _db.getTurmasCached(escolaId, professorId);
-      
+
       if (turmasCached.isNotEmpty) {
-        return turmasCached.map((turmaJson) => Turma.fromMap(turmaJson)).toList();
+        return turmasCached
+            .map((turmaJson) => Turma.fromMap(turmaJson))
+            .toList();
       }
     } catch (e) {
       // Se não conseguir do cache, usar dados mockados como fallback

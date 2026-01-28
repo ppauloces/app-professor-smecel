@@ -36,13 +36,13 @@ class SyncProvider with ChangeNotifier {
 
     try {
       await _checkConnection();
-      
+
       final result = await _syncService.syncPendingData();
-      
+
       _lastSyncResult = result;
       _lastSyncMessage = result['message'];
       _lastSyncTime = DateTime.now();
-      
+
       return result;
     } catch (e) {
       _lastSyncMessage = 'Erro durante sincronização: $e';
@@ -55,10 +55,10 @@ class SyncProvider with ChangeNotifier {
 
   String getLastSyncTimeFormatted() {
     if (_lastSyncTime == null) return 'Nunca';
-    
+
     final now = DateTime.now();
     final difference = now.difference(_lastSyncTime!);
-    
+
     if (difference.inMinutes < 1) {
       return 'Agora há pouco';
     } else if (difference.inHours < 1) {
@@ -80,6 +80,7 @@ class SyncProvider with ChangeNotifier {
     }
   }
 
+  @override
   void dispose() {
     _syncService.dispose();
     super.dispose();

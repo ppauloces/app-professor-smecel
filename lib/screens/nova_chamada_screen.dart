@@ -55,11 +55,11 @@ class _NovaChamadaScreenState extends State<NovaChamadaScreen> {
           data: widget.dataSelecionada,
           aulaNumero: widget.horarioSelecionado.numeroAula,
         );
-        
+
         setState(() {
           _alunos = alunos;
           // Inicializa switches: presente = !temFalta
-          _presencas = { for (var aluno in alunos) aluno.id: !aluno.temFalta };
+          _presencas = {for (var aluno in alunos) aluno.id: !aluno.temFalta};
           _isLoading = false;
         });
       }
@@ -152,7 +152,8 @@ class _NovaChamadaScreenState extends State<NovaChamadaScreen> {
     return '$dia/$mes/$ano';
   }
 
-  int get _totalPresentes => _presencas.values.where((presente) => presente).length;
+  int get _totalPresentes =>
+      _presencas.values.where((presente) => presente).length;
 
   @override
   Widget build(BuildContext context) {
@@ -290,7 +291,7 @@ class _NovaChamadaScreenState extends State<NovaChamadaScreen> {
             itemBuilder: (context, index) {
               final aluno = _alunos[index];
               final isPresente = _presencas[aluno.id] ?? false;
-              
+
               return Card(
                 elevation: 2,
                 margin: const EdgeInsets.only(bottom: 8),
@@ -312,7 +313,7 @@ class _NovaChamadaScreenState extends State<NovaChamadaScreen> {
                   trailing: Switch(
                     value: isPresente,
                     onChanged: (value) => _togglePresenca(aluno.id),
-                    activeColor: Colors.green,
+                    activeThumbColor: Colors.green,
                   ),
                   onTap: () => _togglePresenca(aluno.id),
                 ),

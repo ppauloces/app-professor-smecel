@@ -7,7 +7,7 @@ import '../database/database_helper.dart';
 class SyncService {
   final DatabaseHelper _db = DatabaseHelper();
   static const String _baseUrl = 'https://api.escola.com'; // URL simulada
-  
+
   Timer? _syncTimer;
   bool _isSyncing = false;
 
@@ -41,7 +41,7 @@ class SyncService {
 
     try {
       final registrosPendentes = await _db.getRegistrosPendentes();
-      
+
       if (registrosPendentes.isEmpty) {
         return {'success': true, 'message': 'Nenhum registro pendente'};
       }
@@ -60,16 +60,15 @@ class SyncService {
 
       return {
         'success': erros.isEmpty,
-        'message': erros.isEmpty 
-          ? 'Sincronizados $sincronizados registros'
-          : 'Sincronizados $sincronizados registros com ${erros.length} erros',
+        'message': erros.isEmpty
+            ? 'Sincronizados $sincronizados registros'
+            : 'Sincronizados $sincronizados registros com ${erros.length} erros',
         'detalhes': {
           'sincronizados': sincronizados,
           'erros': erros,
           'total': registrosPendentes.length,
         }
       };
-
     } catch (e) {
       return {'success': false, 'message': 'Erro durante sincronização: $e'};
     } finally {
@@ -80,8 +79,8 @@ class SyncService {
   Future<void> _syncRegistro(Map<String, dynamic> registro) async {
     final tipo = registro['tipo'];
     final dados = registro['dados'];
-    
-    await Future.delayed(Duration(milliseconds: 500));
+
+    await Future.delayed(const Duration(milliseconds: 500));
 
     switch (tipo) {
       case 'turma':
@@ -119,11 +118,12 @@ class SyncService {
     await _db.marcarComoSincronizado('frequencias', frequencia['id']);
   }
 
-  Future<http.Response> _simulateApiCall(String method, String endpoint, Map<String, dynamic> data) async {
+  Future<http.Response> _simulateApiCall(
+      String method, String endpoint, Map<String, dynamic> data) async {
     final url = Uri.parse('$_baseUrl$endpoint');
-    
+
     await Future.delayed(Duration(milliseconds: 200 + (data.length * 10)));
-    
+
     return http.Response(
       jsonEncode({'success': true, 'id': data['id']}),
       200,
