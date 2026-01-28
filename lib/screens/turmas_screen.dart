@@ -4,6 +4,7 @@ import '../models/escola.dart';
 import '../models/turma.dart';
 import '../providers/auth_provider.dart';
 import '../services/turma_service.dart';
+import '../widgets/lottie_loading.dart';
 import 'selecionar_data_screen.dart';
 
 class TurmasScreen extends StatefulWidget {
@@ -68,9 +69,7 @@ class _TurmasScreenState extends State<TurmasScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const LottieLoading();
     }
 
     if (_errorMessage != null) {

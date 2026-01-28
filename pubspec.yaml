@@ -1,5 +1,5 @@
 name: professorv2
-description: Aplicativo Flutter para registro de frequência escolar offline
+description: "SMECEL: Frequ\u00eancia do Professor Offline"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -19,11 +19,25 @@ dependencies:
   shared_preferences: ^2.2.2
   cupertino_icons: ^1.0.2
   intl: ^0.20.2
+  google_fonts: ^6.2.1
+  lottie: ^2.7.0
+  dotlottie_loader: ^0.0.4
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/app-icon.png"
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/svg/

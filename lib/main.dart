@@ -6,13 +6,17 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/connectivity_provider.dart';
+import 'services/notification_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/escolas_screen.dart';
+import 'widgets/lottie_loading.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   if (kDebugMode) {
     HttpOverrides.global = DevHttpOverrides();
   }
+  await NotificationService().initialize();
   runApp(const MyApp());
 }
 
@@ -85,9 +89,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         
         if (authProvider.isLoading) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: LottieLoading(),
           );
         }
 

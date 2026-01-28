@@ -2,10 +2,12 @@ import 'package:flutter/foundation.dart';
 import '../models/professor.dart';
 import '../services/auth_service.dart';
 import '../services/full_sync_service.dart';
+import '../services/notification_service.dart';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
   final FullSyncService _fullSyncService = FullSyncService();
+  final NotificationService _notificationService = NotificationService();
 
   Professor? _professor;
   bool _isLoading = false;
@@ -29,6 +31,11 @@ class AuthProvider with ChangeNotifier {
     try {
       _professor = await _authService.getProfessorLogado();
       _clearError();
+
+      // Se ja estava logado, iniciar lembretes
+      if (_professor != null) {
+        _notificationService.iniciarLembretes(_professor!.codigo);
+      }
     } catch (e) {
       _setError('Erro ao verificar autenticação: $e');
     }
@@ -44,11 +51,14 @@ class AuthProvider with ChangeNotifier {
       final professor = await _authService.login(codigo, email, senha);
       if (professor != null) {
         _professor = professor;
-
-        // SINCRONIZAÇÃO COMPLETA NO LOGIN
-        await _performFullSync(codigo);
-
         _setLoading(false);
+
+        // Sync roda em background apos login (UI ja navega para EscolasScreen)
+        _performFullSync(codigo);
+
+        // Iniciar lembretes de sincronizacao
+        _notificationService.iniciarLembretes(codigo);
+
         return true;
       } else {
         _setError('Código, email ou senha incorretos');
@@ -63,6 +73,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   /// Realiza sincronização completa dos dados do professor com retry
+  /// Realiza sincroniza??o completa dos dados do professor com retry
   Future<void> _performFullSync(String professorCodigo) async {
     _setSyncing(true, 'Verificando dados locais...');
 
@@ -74,7 +85,7 @@ class AuthProvider with ChangeNotifier {
       if (!hasLocal) {
         _setSyncing(true, 'Baixando escolas, turmas e horários...');
 
-        // Tentar até 2 vezes
+        // Tentar at? 2 vezes
         Map<String, dynamic>? result;
         for (int attempt = 1; attempt <= 2; attempt++) {
           result = await _fullSyncService.syncAllData(
@@ -108,6 +119,22 @@ class AuthProvider with ChangeNotifier {
         await Future.delayed(const Duration(seconds: 1));
       }
 
+      // Garantir alunos offline (prefetch por turma, se faltar)
+      _setSyncing(true, 'Baixando alunos para uso offline...');
+      final prefetchResult = await _fullSyncService.prefetchAlunos(professorCodigo);
+
+      if (prefetchResult['success'] == true) {
+        _syncFailed = false;
+        await Future.delayed(const Duration(seconds: 1));
+      } else {
+        final message = prefetchResult['message']?.toString() ?? '';
+        if (!message.contains('Sem conex')) {
+          _syncFailed = true;
+          _setSyncing(true, 'Falha ao baixar alunos offline');
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
+
     } catch (e) {
       debugPrint('Erro na sincronização: $e');
       _syncFailed = true;
@@ -116,9 +143,11 @@ class AuthProvider with ChangeNotifier {
     _setSyncing(false, null);
   }
 
+
   Future<void> logout() async {
     _setLoading(true);
     try {
+      _notificationService.pararLembretes();
       await _authService.logout();
       _professor = null;
       _syncFailed = false;
@@ -191,6 +220,9 @@ class AuthProvider with ChangeNotifier {
   Future<void> onConnectivityRestored() async {
     if (_professor != null && !_isSyncing) {
       debugPrint('[AuthProvider] Conectividade restaurada, iniciando sync incremental...');
+
+      // Verificar se ha pendencias e notificar o professor
+      _notificationService.verificarAoReconectar();
 
       _setSyncing(true, 'Enviando dados offline...');
 

@@ -1,9 +1,26 @@
 import 'dart:convert';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../utils/http_helper.dart';
 import '../models/escola.dart';
+import '../database/database_helper.dart';
 
 class EscolaService {
+  final DatabaseHelper _db = DatabaseHelper();
+
+  Future<bool> _isConnected() async {
+    try {
+      final connectivityResult = await Connectivity().checkConnectivity();
+      return connectivityResult != ConnectivityResult.none;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<List<Escola>> getEscolasByProfessor(String codigoProfessor) async {
+    if (!await _isConnected()) {
+      return _getEscolasOffline(codigoProfessor);
+    }
+
     try {
       final response = await HttpHelper.post(
         '/get_escolas.php',
@@ -24,7 +41,6 @@ class EscolaService {
       }
 
       final raw = decoded['escolas'];
-      // Aceita tanto List quanto Map (ex.: {"0": {...}, "1": {...}})
       final List<dynamic> list = raw is List
           ? raw
           : raw is Map
@@ -36,7 +52,6 @@ class EscolaService {
         final item = list[i];
         if (item is Map) {
           try {
-            // Normaliza chaves e garante tipos em texto para os helpers do modelo
             final Map<String, dynamic> map = {};
             item.forEach((k, v) => map[k.toString()] = v);
             final normalized = <String, dynamic>{
@@ -49,15 +64,28 @@ class EscolaService {
             };
             escolas.add(Escola.fromMap(normalized));
           } catch (err) {
-            throw Exception('Item inválido na posição $i: $item. Erro: $err');
+            throw Exception('Item invalido na posicao $i: $item. Erro: $err');
           }
         } else {
-          throw Exception('Item inválido na posição $i: $item');
+          throw Exception('Item invalido na posicao $i: $item');
         }
       }
       return escolas;
     } catch (e) {
-      throw Exception('Erro de conexão: $e');
+      return _getEscolasOffline(codigoProfessor);
     }
+  }
+
+  Future<List<Escola>> _getEscolasOffline(String codigoProfessor) async {
+    try {
+      final professorId = int.tryParse(codigoProfessor) ?? 0;
+      final escolasCached = await _db.getEscolasCached(professorId);
+      if (escolasCached.isNotEmpty) {
+        return escolasCached.map((e) => Escola.fromMap(e)).toList();
+      }
+    } catch (e) {
+      // Se nao conseguir do cache, retornar vazio
+    }
+    return [];
   }
 }

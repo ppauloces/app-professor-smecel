@@ -330,6 +330,108 @@ class FullSyncService {
     }
   }
 
+  /// Verifica se existe algum aluno salvo localmente
+  Future<bool> hasLocalAlunos() async {
+    try {
+      return await _db.hasAnyAlunos();
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Baixa alunos para uso offline (1 disciplina por turma) usando dados j\u00e1 sincronizados
+  Future<Map<String, dynamic>> prefetchAlunos(String professorCodigo) async {
+    if (!await _isConnected()) {
+      return {
+        'success': false,
+        'message': 'Sem conex\u00e3o para baixar alunos'
+      };
+    }
+
+    final professorId = int.tryParse(professorCodigo) ?? 0;
+    int turmasProcessadas = 0;
+    int turmasComAlunos = 0;
+    int turmasJaCacheadas = 0;
+    int turmasSemCache = 0;
+    int totalAlunos = 0;
+
+    try {
+      final escolas = await _db.getEscolasCached(professorId);
+
+      for (final escola in escolas) {
+        final escolaIdRaw = escola['escola_id'];
+        final escolaId = escolaIdRaw is int ? escolaIdRaw : int.tryParse(escolaIdRaw.toString()) ?? 0;
+        final turmas = await _db.getTurmasCached(escolaId, professorId);
+
+        for (final turma in turmas) {
+          turmasProcessadas++;
+          final turmaIdRaw = turma['turma_id'];
+          final turmaId = turmaIdRaw is int ? turmaIdRaw : int.tryParse(turmaIdRaw.toString()) ?? 0;
+
+          if (await _db.hasAlunosForTurma(turmaId)) {
+            turmasJaCacheadas++;
+            continue;
+          }
+          turmasSemCache++;
+
+          final disciplinas = await _db.getDisciplinasCached(turmaId, escolaId, professorId);
+          if (disciplinas.isEmpty) {
+            continue;
+          }
+
+          bool carregou = false;
+          for (final disciplinaId in disciplinas) {
+            try {
+              _log('Prefetch alunos: Turma $turmaId, Disciplina $disciplinaId');
+              final alunos = await _syncAlunos(professorId, turmaId, disciplinaId);
+              if (alunos.isNotEmpty) {
+                totalAlunos += alunos.length;
+                turmasComAlunos++;
+                carregou = true;
+                break;
+              }
+            } catch (e) {
+              _log('Erro ao prefetch alunos da turma $turmaId, disciplina $disciplinaId: $e');
+            }
+          }
+
+          if (!carregou) {
+            _log('Nenhum aluno retornado para turma $turmaId');
+          }
+        }
+      }
+
+      if (turmasSemCache == 0) {
+        return {
+          'success': true,
+          'message': 'Nenhum aluno pendente para cache',
+          'details': {
+            'turmas_processadas': turmasProcessadas,
+            'turmas_com_alunos': turmasComAlunos,
+            'turmas_ja_cacheadas': turmasJaCacheadas,
+            'total_alunos': totalAlunos,
+          }
+        };
+      }
+
+      return {
+        'success': true,
+        'message': 'Prefetch de alunos conclu\u00eddo',
+        'details': {
+          'turmas_processadas': turmasProcessadas,
+          'turmas_com_alunos': turmasComAlunos,
+          'turmas_ja_cacheadas': turmasJaCacheadas,
+          'total_alunos': totalAlunos,
+        }
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Erro ao baixar alunos: $e'
+      };
+    }
+  }
+
   /// Sincronização incremental - apenas upload de pendências e download de mudanças
   Future<Map<String, dynamic>> syncIncremental(String professorCodigo) async {
     if (!await _isConnected()) {

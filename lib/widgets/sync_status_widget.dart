@@ -11,7 +11,7 @@ class SyncStatusWidget extends StatelessWidget {
     return Consumer2<ConnectivityProvider, AuthProvider>(
       builder: (context, connectivity, auth, child) {
         return PopupMenuButton<String>(
-          icon: _buildStatusIcon(connectivity),
+          icon: _buildStatusIcon(connectivity, auth),
           onSelected: (value) {
             if (value == 'sync_now') {
               _performManualSync(context, connectivity, auth);
@@ -50,7 +50,13 @@ class SyncStatusWidget extends StatelessWidget {
                     'Último sync: ${connectivity.lastSyncTimeFormatted}',
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
-                  if (connectivity.lastSyncMessage != null) ...[
+                  if (auth.isSyncing && auth.syncMessage != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      auth.syncMessage!,
+                      style: const TextStyle(fontSize: 11, color: Colors.orange),
+                    ),
+                  ] else if (connectivity.lastSyncMessage != null) ...[
                     const SizedBox(height: 4),
                     Text(
                       connectivity.lastSyncMessage!,
@@ -97,8 +103,8 @@ class SyncStatusWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusIcon(ConnectivityProvider connectivity) {
-    if (connectivity.isSyncing) {
+  Widget _buildStatusIcon(ConnectivityProvider connectivity, [AuthProvider? auth]) {
+    if (connectivity.isSyncing || (auth != null && auth.isSyncing)) {
       return const SizedBox(
         width: 20,
         height: 20,

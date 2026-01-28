@@ -5,6 +5,7 @@ import '../models/turma.dart';
 import '../models/horario.dart';
 import '../providers/auth_provider.dart';
 import '../services/horario_service.dart';
+import '../widgets/lottie_loading.dart';
 import 'nova_chamada_screen.dart';
 
 class SelecionarHorarioScreen extends StatefulWidget {
@@ -98,16 +99,7 @@ class _SelecionarHorarioScreenState extends State<SelecionarHorarioScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Buscando horários...'),
-          ],
-        ),
-      );
+      return const LottieLoading(message: 'Buscando horários...');
     }
 
     if (_errorMessage != null) {

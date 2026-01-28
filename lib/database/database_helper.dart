@@ -460,6 +460,25 @@ class DatabaseHelper {
     }).toList();
   }
 
+  Future<bool> hasAnyAlunos() async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT COUNT(*) as total FROM alunos');
+    final total = result.isNotEmpty ? result.first['total'] : 0;
+    final count = int.tryParse(total.toString()) ?? 0;
+    return count > 0;
+  }
+
+  Future<bool> hasAlunosForTurma(int turmaId) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as total FROM alunos WHERE turma_id = ?',
+      [turmaId],
+    );
+    final total = result.isNotEmpty ? result.first['total'] : 0;
+    final count = int.tryParse(total.toString()) ?? 0;
+    return count > 0;
+  }
+
   // Limpa registros de faltas locais de uma aula específica
   Future<void> clearFaltasLocal(int disciplinaId, int aulaNumero, String data) async {
     final db = await database;
@@ -488,6 +507,18 @@ class DatabaseHelper {
       );
     }
     await batch.commit(noResult: true);
+  }
+
+  Future<List<int>> getDisciplinasCached(int turmaId, int escolaId, int professorId) async {
+    final db = await database;
+    final maps = await db.rawQuery(
+      'SELECT DISTINCT disciplina_id FROM horarios WHERE turma_id = ? AND escola_id = ? AND professor_id = ?',
+      [turmaId, escolaId, professorId],
+    );
+    return maps
+        .map((map) => int.tryParse((map['disciplina_id'] ?? '').toString()) ?? 0)
+        .where((id) => id > 0)
+        .toList();
   }
 
   // ===== HORÁRIOS =====

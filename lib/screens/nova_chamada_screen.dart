@@ -6,6 +6,7 @@ import '../models/horario.dart';
 import '../models/aluno.dart';
 import '../providers/auth_provider.dart';
 import '../services/nova_frequencia_service.dart';
+import '../widgets/lottie_loading.dart';
 
 class NovaChamadaScreen extends StatefulWidget {
   final Escola escola;
@@ -205,16 +206,7 @@ class _NovaChamadaScreenState extends State<NovaChamadaScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Carregando alunos...'),
-          ],
-        ),
-      );
+      return const LottieLoading(message: 'Carregando alunos...');
     }
 
     if (_errorMessage != null) {
